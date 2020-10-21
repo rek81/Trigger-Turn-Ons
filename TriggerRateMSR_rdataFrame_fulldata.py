@@ -29,20 +29,24 @@ def MakeNBinsFromMinToMax(N,Min,Max):
 Xbins = [900.,1000.,1100.,1200.,1300.,1400.,1500.,1750.,2000.,5000.]
 abins = MakeNBinsFromMinToMax(10, 15., 115.)
 abins += MakeNBinsFromMinToMax(3, 130., 200.)
-HTbins = MakeNBinsFromMinToMax(300, 500., 3500.)
+HTbins = MakeNBinsFromMinToMax(150, 500., 3500.)
 
-dataweight = "1."
 
-masscuts900 = "evt_HT>900. && J1pt>300. && J2pt>300. && J1eta<2.4 && J2eta<2.4"
-masscuts1200 = "evt_HT>1200. && J1pt>300. && J2pt>300. && J1eta<2.4 && J2eta<2.4"
+masscuts900 = "evt_HT>900. && J1pt>300. && J2pt>300. && abs(J1eta)<2.4 && abs(J2eta)<2.4"
+masscuts1200 = "evt_HT>1200. && J1pt>300. && J2pt>300. && abs(J1eta)<2.4 && abs(J2eta)<2.4"
 HTcuts = "evt_HT>0."
 
 
 HT = ["evt_HT", "Jet HT (GeV)", HTcuts, HTbins, "HT900"]
-X = ["evt_XM", "Dijet Mass (GeV)", masscuts900, Xbins, "HT900"]
-a = ["evt_aM", "Averege Jet Mass (GeV)", masscuts900, abins, "HT900"]
+#X = ["evt_XM", "Dijet Mass (GeV)", masscuts900, Xbins, "HT900"]
+X = ["evt_XM", "Dijet Mass (GeV)", HTcuts, Xbins, "HT900"]
+#a = ["evt_aM", "Averege Jet Mass (GeV)", masscuts900, abins, "HT900"]
+a = ["evt_aM", "Averege Jet Mass (GeV)", HTcuts, abins, "HT900"]
+#X = ["evt_XM", "Dijet Mass (GeV)", masscuts900, Xbins, "HT900"]
+#a = ["evt_aM", "Averege Jet Mass (GeV)", masscuts900, abins, "HT900"]
 
-var = [HT, X, a]
+#var = [HT, X, a]
+var = [HT]
 
 
 NumFiles = [
@@ -78,33 +82,30 @@ for v in var:
     FNum = ROOT.TChain("tree_nominal")
     for f in NumFiles:
         FNum.Add(f)
-                    
+        print f + " file added"
     rdfNum = RDF(FNum)
     rdfNum = rdfNum.Define("dataweight", "1.")
-                
-
     num_lazy = rdfNum.Filter(v[2]).Histo1D(("Num", ";"+v[0]+";events", len(v[3])-1, numpy.array(v[3])), v[0], "dataweight")
     TrigNum = num_lazy.GetValue()
     TrigNum.GetXaxis().SetTitle(v[1])
-    
 
 
     FDen = ROOT.TChain("tree_nominal")
     for f in DenFiles:
         FDen.Add(f)
+        print f + " file added"
     rdfDen = RDF(FDen)
     rdfDen = rdfDen.Define("dataweight", "1.")
     den_lazy = rdfDen.Filter(v[2]).Histo1D(("Den", ";"+v[0]+";events", len(v[3])-1, numpy.array(v[3])), v[0], "dataweight")
     TrigDen = den_lazy.GetValue()
     TrigDen.GetXaxis().SetTitle(v[1])
     
-#    print "for "+v[0]+" numerator integral is "+str(TrigNum.Integral()) + " in run " + i[1]
-#    print "for "+v[0]+" denominator integral is "+str(TrigDen.Integral()) + " in run " + i[1]
-                
     TrigNum.Sumw2()
     TrigDen.Sumw2()
                 
     newNum = TrigNum.Clone("nnew")
+    newDen = TrigNum.Clone("dnew")
+    newNumbyitself = TrigNum.Clone("nnew2")
     newNum.SetStats(0)
     newNum.GetYaxis().SetTitle("Trigger Efficiency (%)")
     newNum.SetLineColor(kBlue)
@@ -112,31 +113,33 @@ for v in var:
     newNum.SetMarkerColor(9)
 
     print "new num integral " + str(newNum.Integral())
-    print "old num integral " + str(TrigNum.Integral())
     print "den integral " + str(TrigDen.Integral())
+
+    for i in (range(newNum.GetNbinsX())):
+        print "for bin "+str(i)+" num/den is "+str((newNum.GetBinContent(i)/TrigDen.GetBinContent(i)))
+
     
     newNum.Divide(TrigDen)
     
     newNum.Scale(100)
-    newNum.Scale(100)
     
-    TrigNum.Scale(1000./TrigNum.Integral())
-    TrigDen.Scale(1000./TrigDen.Integral())
+#    TrigNum.Scale(1000./TrigNum.Integral())
+#    TrigDen.Scale(1000./TrigDen.Integral())
     
-    TrigNum.SetLineColor(kRed)
-    TrigNum.SetMarkerStyle(20)
-    TrigNum.SetMarkerColor(2)
+    newNumbyitself.SetLineColor(kRed)
+    newNumbyitself.SetMarkerStyle(20)
+    newNumbyitself.SetMarkerColor(2)
     
-    TrigDen.SetLineColor(kGreen)
-    TrigDen.SetMarkerStyle(20)
-    TrigDen.SetMarkerColor(3)
+    newDen.SetLineColor(kGreen)
+    newDen.SetMarkerStyle(20)
+    newDen.SetMarkerColor(3)
     
     
     Box = TBox(v[3][0], 100.01, v[3][-1], 110.)
     Box.SetLineColor(kWhite)
     Box.SetFillColor(kWhite)
     
-    Flat = TLine(v[3][0], 100, v[3][-1], 100)
+    Flat = TLine(v[3][0], 100., v[3][-1], 100.)
     Flat.SetLineColor(kBlack)
     
     if v[4] is "HT900":
@@ -151,20 +154,20 @@ for v in var:
     L.SetLineColor(0)
     L.SetFillColor(0)
     L.AddEntry(newNum, "2016 SingleMuon (HLT_Mu50 Ref. Trigger)", "P")
-    L.AddEntry(TrigNum, "Numerator, Scale: 1000)", "P")
-    L.AddEntry(TrigDen, "Denominator, Scale: 1000", "P")
+    L.AddEntry(newNumbyitself, "Numerator, Scale: 1000)", "P")
+    L.AddEntry(newDen, "Denominator, Scale: 1000", "P")
     
     
     C = TCanvas()
     C.cd()
     newNum.Draw("histe p")
-    TrigNum.Draw("histsamee p")
-    TrigDen.Draw("histsamee p")
+    newNumbyitself.Draw("histsamee p")
+    newDen.Draw("histsamee p")
     Flat.Draw("same")
     Box.Draw("same")
     if v[0] is "evt_HT":
         Tall.Draw("same")
-                    #        L.Draw("same")
+#    L.Draw("same")
     gPad.SetTicks(1, 1)
     gPad.RedrawAxis()
     if "900" in v[4]:
